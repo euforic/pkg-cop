@@ -1,6 +1,8 @@
-# Supply Chain Exposure Scanner
+# Pkg Cop
 
-`supply-chain-scan` is a small Go 1.26+ command-line scanner for package supply-chain incident response. It scans local projects, package manager caches, Python installations, and running process command lines for package/version indicators and high-confidence IOCs.
+![Pkg Cop banner](docs/assets/pkg-cop-banner.png)
+
+`pkg-cop` is a small Go 1.26+ command-line scanner for package supply-chain incident response. It scans local projects, package manager caches, Python installations, and running process command lines for package/version indicators and high-confidence IOCs.
 
 The scanner logic is generic. Incident data lives in `config.yaml`, so a new supply-chain issue can be handled by editing YAML instead of changing Go code.
 
@@ -24,9 +26,9 @@ Requirements:
 
 - Go 1.26 or newer
 
-Download a release archive from [GitHub Releases](https://github.com/euforic/supply-chain-scan/releases). Release archives include:
+Download a release archive from [GitHub Releases](https://github.com/euforic/pkg-cop/releases). Release archives include:
 
-- the `supply-chain-scan` binary
+- the `pkg-cop` binary
 - `config.yaml`
 - `README.md`
 - `LICENSE`
@@ -34,9 +36,9 @@ Download a release archive from [GitHub Releases](https://github.com/euforic/sup
 Build from source:
 
 ```sh
-git clone git@github.com:euforic/supply-chain-scan.git
-cd supply-chain-scan
-go build -o supply-chain-scan .
+git clone git@github.com:euforic/pkg-cop.git
+cd pkg-cop
+go build -o pkg-cop .
 ```
 
 Run without building:
@@ -50,25 +52,25 @@ go run . ~/projects ~/Documents
 Scan common local source roots:
 
 ```sh
-./supply-chain-scan ~/projects ~/Documents
+./pkg-cop ~/projects ~/Documents
 ```
 
 Emit JSON for automation:
 
 ```sh
-./supply-chain-scan -json ~/projects > scan-report.json
+./pkg-cop -json ~/projects > scan-report.json
 ```
 
 Use an explicit config:
 
 ```sh
-./supply-chain-scan -config config.yaml ~/projects
+./pkg-cop -config config.yaml ~/projects
 ```
 
 Fast lockfile-oriented pass:
 
 ```sh
-./supply-chain-scan -skip-node-modules -no-caches -no-python -no-processes ~/projects
+./pkg-cop -skip-node-modules -no-caches -no-python -no-processes ~/projects
 ```
 
 ## Output
@@ -76,7 +78,7 @@ Fast lockfile-oriented pass:
 Clean human output:
 
 ```text
-Mini Shai-Hulud exposure scanner
+Pkg Cop
 Scanned files: 128 text files (2041 seen)
 Roots: /Users/example/projects
 
@@ -86,7 +88,7 @@ Status: CLEAN - no known indicators found.
 Exposure output:
 
 ```text
-Mini Shai-Hulud exposure scanner
+Pkg Cop
 Scanned files: 14 text files (233 seen)
 Roots: /tmp/repro
 
@@ -130,7 +132,7 @@ JSON output:
 
 ```text
 Usage:
-  supply-chain-scan [roots...] [options]
+  pkg-cop [roots...] [options]
 
 Options:
   -root PATH              Add a root to scan. Positional paths also work.
@@ -300,13 +302,13 @@ Keep this list focused. Adding broad names like `index.js` across large reposito
    ```sh
    mkdir -p /tmp/scan-fixture
    printf 'compromised-package==4.2.0\n' > /tmp/scan-fixture/requirements.txt
-   ./supply-chain-scan -config my-incident.yaml -no-caches -no-python -no-processes /tmp/scan-fixture
+   ./pkg-cop -config my-incident.yaml -no-caches -no-python -no-processes /tmp/scan-fixture
    ```
 
 6. Scan real roots:
 
    ```sh
-   ./supply-chain-scan -config my-incident.yaml ~/projects ~/Documents
+   ./pkg-cop -config my-incident.yaml ~/projects ~/Documents
    ```
 
 ## Updating The Shipped Config
@@ -326,8 +328,8 @@ When new indicators are published:
 6. Build and run a clean local scan:
 
    ```sh
-   go build -o supply-chain-scan .
-   ./supply-chain-scan -no-caches -no-python -no-processes -skip-node-modules .
+   go build -o pkg-cop .
+   ./pkg-cop -no-caches -no-python -no-processes -skip-node-modules .
    ```
 
 ## Remediation Guidance
@@ -354,7 +356,7 @@ go test ./...
 Build:
 
 ```sh
-go build -o supply-chain-scan .
+go build -o pkg-cop .
 ```
 
 ## Releases

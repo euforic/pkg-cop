@@ -153,7 +153,7 @@ func parseArgs(args []string) (options, error) {
 		maxBytes:           defaultMaxBytes,
 	}
 	var roots stringList
-	fs := flag.NewFlagSet("mini-shai-hulud-scan", flag.ContinueOnError)
+	fs := flag.NewFlagSet("pkg-cop", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 	fs.Var(&roots, "root", "Add a root to scan. Positional paths also work.")
 	fs.BoolVar(&opts.jsonOutput, "json", false, "Emit machine-readable JSON.")
@@ -204,10 +204,10 @@ func parseArgs(args []string) (options, error) {
 }
 
 func printUsage() {
-	fmt.Println(`Mini Shai-Hulud exposure scanner
+	fmt.Println(`Pkg Cop
 
 Usage:
-  mini-shai-hulud-scan [roots...] [options]
+  pkg-cop [roots...] [options]
 
 Options:
   -root PATH              Add a root to scan. Positional paths also work.
@@ -668,7 +668,7 @@ func buildReport(findings []finding, counts counters, roots []string) report {
 
 func printHuman(rep report, quiet bool) {
 	if !quiet {
-		fmt.Println("Mini Shai-Hulud exposure scanner")
+		fmt.Println("Pkg Cop")
 		fmt.Printf("Scanned files: %d text files (%d seen)\n", rep.Counters.FilesScanned, rep.Counters.FilesSeen)
 		fmt.Printf("Roots: %s\n\n", strings.Join(rep.Roots, ", "))
 	}

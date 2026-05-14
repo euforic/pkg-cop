@@ -1,4 +1,4 @@
-module mini-shai-hulud-scan
+module pkg-cop
 
 go 1.26
 

@@ -24,6 +24,13 @@ Requirements:
 
 - Go 1.26 or newer
 
+Download a release archive from [GitHub Releases](https://github.com/euforic/supply-chain-scan/releases). Release archives include:
+
+- the `supply-chain-scan` binary
+- `config.yaml`
+- `README.md`
+- `LICENSE`
+
 Build from source:
 
 ```sh
@@ -348,6 +355,25 @@ Build:
 
 ```sh
 go build -o supply-chain-scan .
+```
+
+## Releases
+
+Releases are built with GoReleaser through GitHub Actions.
+
+Create a release by pushing a version tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow builds Linux, macOS, and Windows artifacts for `amd64` and `arm64`, packages `config.yaml` with each archive, and publishes checksums.
+
+You can also run a snapshot build locally if GoReleaser is installed:
+
+```sh
+goreleaser release --snapshot --clean
 ```
 
 The tests use real temporary files and scanner logic. They do not mock the parser or filesystem scanner.

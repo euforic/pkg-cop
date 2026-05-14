@@ -73,9 +73,13 @@ func Run(_ context.Context, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return ExitError{Code: 2, Message: err.Error()}
 		}
-		fmt.Fprintln(stdout, string(encoded))
+		if _, err := fmt.Fprintln(stdout, string(encoded)); err != nil {
+			return ExitError{Code: 2, Message: err.Error()}
+		}
 	} else {
-		fmt.Fprint(stdout, scanner.FormatHuman(rep, opts.Quiet))
+		if _, err := fmt.Fprint(stdout, scanner.FormatHuman(rep, opts.Quiet)); err != nil {
+			return ExitError{Code: 2, Message: err.Error()}
+		}
 	}
 	if rep.Vulnerable {
 		return ExitError{Code: 1}
@@ -144,7 +148,7 @@ func Parse(args []string, output io.Writer) (Options, error) {
 }
 
 func printUsage(out io.Writer) {
-	fmt.Fprintln(out, `Pkg Cop
+	_, _ = fmt.Fprintln(out, `Pkg Cop
 
 Usage:
   pkg-cop [roots...] [options]

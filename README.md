@@ -10,17 +10,17 @@ The scanner logic is generic. Incident data lives in `config.yaml`, so a new sup
 
 The scanner currently ships with a Mini Shai-Hulud / TanStack incident config that covers:
 
-- affected npm packages and exact versions
-- affected PyPI packages and exact versions
-- affected Go modules and exact versions
-- affected Rust crates and exact versions
+- affected npm packages using exact versions and compact version ranges
+- affected PyPI packages using exact versions and compact version ranges
+- affected Go modules using exact versions and semver-style ranges
+- affected Rust crates using exact versions and semver-style ranges
 - malicious optional dependency markers such as `@tanstack/setup`
 - payload filenames such as `router_init.js`, `tanstack_runner.js`, and `transformers.pyz`
 - exfiltration or payload URLs/domains
 - persistence/wiper indicators such as `gh-token-monitor`
 - package manager lockfiles, installed package metadata, caches, and process command lines
 
-Any package/version match, IOC string, payload filename, or process match is reported as exposure evidence.
+Any package/version selector match, IOC string, payload filename, or process match is reported as exposure evidence.
 
 ## Install
 
@@ -205,7 +205,7 @@ ecosystems:
         version_patterns:
           - "1.2.x"
         version_ranges:
-          - ">=2.0.0 <2.1.0"
+          - ">=2.0.0 <=2.0.4"
     scan_filenames:
       - "package-lock.json"
 
@@ -279,11 +279,13 @@ The scanner uses the file being inspected to choose the relevant ecosystem. For 
 
 ### Version Selectors
 
-Package entries support three selector fields:
+Package entries support three selector fields. Use the narrowest selector that accurately represents the incident data:
 
-- `versions`: exact versions by default; also accepts wildcard or range syntax for convenience.
+- `versions`: exact versions, with wildcard or range syntax also accepted for backward-compatible convenience.
 - `version_patterns`: wildcard selectors such as `1.2.x`, `1.*`, or `0.9.*`.
-- `version_ranges`: semver-style ranges such as `>=1.2.0 <1.3.0`, `^1.2.3`, and `~1.2.0`.
+- `version_ranges`: semver-style ranges such as `>=1.2.0 <=1.2.8`, `>=1.2.0 <1.3.0`, `^1.2.3`, and `~1.2.0`.
+
+The shipped incident config uses `version_ranges` for contiguous affected patch runs and keeps sparse, non-contiguous version lists in `versions`. That avoids broadening indicators beyond the published affected versions while keeping the YAML readable.
 
 For Go modules, exact versions should use Go's version string, including the `v` prefix:
 
@@ -363,17 +365,15 @@ If a file with this basename is found under a scanned root, it is reported even 
    cp config.yaml my-incident.yaml
    ```
 
-2. Replace or append affected package/version entries under the right ecosystem:
+2. Replace or append affected package/version entries under the right ecosystem. Prefer `version_ranges` for contiguous affected patch runs and `versions` for sparse versions:
 
    ```yaml
    ecosystems:
      pypi:
        packages:
          - name: "compromised-package"
-           versions:
-             - "4.2.0"
            version_ranges:
-             - ">=4.2.0 <4.2.3"
+             - ">=4.2.0 <=4.2.3"
    ```
 
 3. Add unique IOCs:
@@ -396,7 +396,7 @@ If a file with this basename is found under a scanned root, it is reported even 
 
    ```sh
    mkdir -p /tmp/scan-fixture
-   printf 'compromised-package==4.2.0\n' > /tmp/scan-fixture/requirements.txt
+   printf 'compromised-package==4.2.2\n' > /tmp/scan-fixture/requirements.txt
    ./pkg-cop -config my-incident.yaml -no-caches -no-python -no-processes /tmp/scan-fixture
    ```
 
@@ -414,13 +414,14 @@ When new indicators are published:
 2. Add domains, URLs, hashes, or marker strings to `ioc_strings`.
 3. Add payload or persistence filenames to `payload_filenames`.
 4. Add any new lockfile or metadata filenames to the right ecosystem `scan_filenames`.
-5. Run tests:
+5. Keep selectors narrow: use `version_ranges` for contiguous patch runs, `version_patterns` only when the advisory really affects an entire wildcard set, and exact `versions` for sparse lists.
+6. Run tests:
 
    ```sh
    go test ./...
    ```
 
-6. Build and run a clean local scan:
+7. Build and run a clean local scan:
 
    ```sh
    go build -o pkg-cop ./cmd/pkg-cop

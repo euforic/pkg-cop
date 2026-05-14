@@ -178,6 +178,29 @@ version = "0.9.4"
 	})
 }
 
+func TestScannerDeduplicatesOverlappingTextMatches(t *testing.T) {
+	scan := newTestScanner(t, config.Config{
+		Ecosystems: map[string]config.EcosystemConfig{
+			"npm": {
+				Packages: []config.Package{
+					{Name: "@scope/pkg", VersionRanges: []string{">=1.2.0 <=1.2.3"}},
+				},
+				ScanFilenames: []string{"package-lock.json"},
+			},
+		},
+	})
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "package-lock.json"), "@scope/pkg@1.2.3\n")
+
+	rep := scan.Run(testOptions(root))
+	assertVulnerable(t, rep, map[string]bool{
+		"@scope/pkg@1.2.3": false,
+	})
+	if len(rep.Findings) != 1 {
+		t.Fatalf("expected one deduplicated finding, got %#v", rep.Findings)
+	}
+}
+
 func newTestScanner(t *testing.T, cfg config.Config) *Scanner {
 	t.Helper()
 	if err := cfg.Validate("test"); err != nil {

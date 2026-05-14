@@ -516,6 +516,7 @@ func addFinding(findings *[]Finding, severity, kind, file, detail string) {
 }
 
 func buildReport(findings []Finding, counts Counters, roots []string) Report {
+	findings = uniqueFindings(findings)
 	critical := 0
 	high := 0
 	for _, f := range findings {
@@ -545,6 +546,19 @@ func buildReport(findings []Finding, counts Counters, roots []string) Report {
 		Roots:      roots,
 		Guidance:   guidance,
 	}
+}
+
+func uniqueFindings(findings []Finding) []Finding {
+	seen := make(map[Finding]struct{}, len(findings))
+	out := make([]Finding, 0, len(findings))
+	for _, finding := range findings {
+		if _, ok := seen[finding]; ok {
+			continue
+		}
+		seen[finding] = struct{}{}
+		out = append(out, finding)
+	}
+	return out
 }
 
 func FormatHuman(rep Report, quiet bool) string {

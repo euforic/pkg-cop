@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pkg Cop"
+  short_description: "Use pkg-cop scans and configs"
+  default_prompt: "Use $pkg-cop to scan this project with the appropriate package incident config."

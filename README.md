@@ -46,7 +46,7 @@ go build -o pkg-cop ./cmd/pkg-cop
 Run without building:
 
 ```sh
-go run ./cmd/pkg-cop -- -config shai-hulud.yaml ~/projects ~/Documents
+go run ./cmd/pkg-cop -config shai-hulud.yaml ~/projects ~/Documents
 ```
 
 ## Quick Start

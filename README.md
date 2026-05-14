@@ -40,13 +40,13 @@ Build from source:
 ```sh
 git clone git@github.com:euforic/pkg-cop.git
 cd pkg-cop
-go build -o pkg-cop .
+go build -o pkg-cop ./cmd/pkg-cop
 ```
 
 Run without building:
 
 ```sh
-go run . ~/projects ~/Documents
+go run ./cmd/pkg-cop ~/projects ~/Documents
 ```
 
 ## Quick Start
@@ -367,7 +367,7 @@ When new indicators are published:
 6. Build and run a clean local scan:
 
    ```sh
-   go build -o pkg-cop .
+   go build -o pkg-cop ./cmd/pkg-cop
    ./pkg-cop -no-caches -no-python -no-processes -skip-node-modules .
    ```
 
@@ -384,6 +384,21 @@ If the scanner reports exposure:
 
 This scanner is an indicator scanner. It does not prove a host or CI runner is clean, and it does not replace audit-log review.
 
+## Project Layout
+
+The project follows the usual small Go CLI layout:
+
+```text
+cmd/pkg-cop/          CLI entrypoint
+internal/cli/         flag parsing, exit codes, output selection
+internal/config/      YAML config loading and validation
+internal/scanner/     scan engine, matchers, reports, and tests
+internal/set/         tiny local set helper
+config.yaml           shipped indicator config
+```
+
+Incident data belongs in `config.yaml`. Scanner behavior belongs in `internal/scanner`. The command in `cmd/pkg-cop` should stay thin.
+
 ## Development
 
 Run tests:
@@ -395,7 +410,7 @@ go test ./...
 Build:
 
 ```sh
-go build -o pkg-cop .
+go build -o pkg-cop ./cmd/pkg-cop
 ```
 
 ## Releases

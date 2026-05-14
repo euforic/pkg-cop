@@ -9,7 +9,7 @@ before:
 
 builds:
   - id: pkg-cop
-    main: .
+    main: ./cmd/pkg-cop
     binary: pkg-cop
     env:
       - CGO_ENABLED=0

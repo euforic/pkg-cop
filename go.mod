@@ -1,4 +1,4 @@
-module pkg-cop
+module github.com/euforic/pkg-cop
 
 go 1.26
 

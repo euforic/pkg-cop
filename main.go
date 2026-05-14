@@ -321,11 +321,33 @@ func cacheRoots() []string {
 		filepath.Join(home, ".npm"),
 		filepath.Join(home, ".bun", "install", "cache"),
 		filepath.Join(home, ".cache", "pip"),
+		filepath.Join(home, ".cargo", "registry", "src"),
+		filepath.Join(home, ".cargo", "git", "checkouts"),
 		filepath.Join(home, "Library", "pnpm"),
 		filepath.Join(home, "Library", "Caches", "pnpm"),
 		filepath.Join(home, ".pnpm-store"),
 	}
+	candidates = append(candidates, goCacheRoots()...)
 	return existingDirs(candidates)
+}
+
+func goCacheRoots() []string {
+	var roots []string
+	for _, envName := range []string{"GOMODCACHE", "GOPATH"} {
+		out, err := exec.Command("go", "env", envName).Output()
+		if err != nil {
+			continue
+		}
+		value := strings.TrimSpace(string(out))
+		if value == "" {
+			continue
+		}
+		if envName == "GOPATH" {
+			value = filepath.Join(value, "pkg", "mod")
+		}
+		roots = append(roots, value)
+	}
+	return roots
 }
 
 func pythonRoots() []string {
@@ -541,6 +563,8 @@ func textIndicatesVersion(text, name, version string) bool {
 		regexp.MustCompile(`(?i)(?:^|\n)Name:\s*` + escapedName + `\s*\nVersion:\s*` + escapedVersion + `([^\w.-]|$)`),
 		regexp.MustCompile(`(?is)name\s*=\s*["']` + escapedName + `["'].{0,500}?version\s*=\s*["']` + escapedVersion + `["']`),
 		regexp.MustCompile(`(?is)version\s*=\s*["']` + escapedVersion + `["'].{0,500}?name\s*=\s*["']` + escapedName + `["']`),
+		regexp.MustCompile(`(?m)^\s*` + escapedName + `\s+` + escapedVersion + `(?:\s|/|$)`),
+		regexp.MustCompile(`(?m)^\s*require\s+` + escapedName + `\s+` + escapedVersion + `(?:\s|$)`),
 		regexp.MustCompile(`/` + tarball + `-` + escapedVersion + `([^\w.-]|$)`),
 	}
 	for _, pattern := range patterns {

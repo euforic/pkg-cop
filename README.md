@@ -12,6 +12,8 @@ The scanner currently ships with a Mini Shai-Hulud / TanStack incident config th
 
 - affected npm packages and exact versions
 - affected PyPI packages and exact versions
+- affected Go modules and exact versions
+- affected Rust crates and exact versions
 - malicious optional dependency markers such as `@tanstack/setup`
 - payload filenames such as `router_init.js`, `tanstack_runner.js`, and `transformers.pyz`
 - exfiltration or payload URLs/domains
@@ -169,6 +171,10 @@ Project and dependency files:
 - `Pipfile.lock`
 - `METADATA`
 - `PKG-INFO`
+- `go.mod`
+- `go.sum`
+- `Cargo.toml`
+- `Cargo.lock`
 
 Runtime and cache areas:
 
@@ -177,6 +183,9 @@ Runtime and cache areas:
 - Bun install cache under `~/.bun/install/cache`
 - pip cache under `~/.cache/pip`
 - pnpm store/cache paths under the user home directory
+- Go module cache from `go env GOMODCACHE` and `go env GOPATH`/`pkg/mod`
+- Cargo registry sources under `~/.cargo/registry/src`
+- Cargo git checkouts under `~/.cargo/git/checkouts`
 - Python `site-packages` paths discovered from `python3` and `python`
 - running process command lines from `ps` or `wmic`
 
@@ -204,6 +213,8 @@ payload_filenames:
 scan_filenames:
   - "package-lock.json"
   - "requirements.txt"
+  - "go.sum"
+  - "Cargo.lock"
   - "METADATA"
 ```
 
@@ -220,9 +231,33 @@ packages:
   - name: "mistralai"
     versions:
       - "2.4.6"
+  - name: "github.com/example/badmod"
+    versions:
+      - "v1.2.3"
+  - name: "bad-crate"
+    versions:
+      - "0.9.0"
 ```
 
-The scanner looks for these in structured npm lockfiles, npm manifests, Python requirement files, Python lockfiles, and installed Python package metadata.
+The scanner looks for these in structured npm lockfiles, npm manifests, Python requirement files, Python lockfiles, installed Python package metadata, Go module files, Go module cache metadata, Cargo manifests, and Cargo lockfiles.
+
+For Go modules, use the module path and Go's version string, including the `v` prefix:
+
+```yaml
+packages:
+  - name: "github.com/acme/compromised"
+    versions:
+      - "v1.2.3"
+```
+
+For Rust crates, use the crate name exactly as it appears in `Cargo.toml` or `Cargo.lock`:
+
+```yaml
+packages:
+  - name: "compromised-crate"
+    versions:
+      - "0.4.2"
+```
 
 ### `ioc_strings`
 
@@ -259,6 +294,10 @@ scan_filenames:
   - "package-lock.json"
   - "pnpm-lock.yaml"
   - "requirements.txt"
+  - "go.mod"
+  - "go.sum"
+  - "Cargo.toml"
+  - "Cargo.lock"
   - "METADATA"
 ```
 

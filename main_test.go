@@ -74,6 +74,63 @@ func TestScannerCleanFixture(t *testing.T) {
 	}
 }
 
+func TestScannerDetectsGoAndRustIndicators(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "test-config.yaml")
+	writeFile(t, configPath, `packages:
+  - name: "github.com/example/badmod"
+    versions:
+      - "v1.2.3"
+  - name: "bad-crate"
+    versions:
+      - "0.9.0"
+ioc_strings: []
+payload_filenames: []
+scan_filenames:
+  - "go.mod"
+  - "go.sum"
+  - "Cargo.toml"
+  - "Cargo.lock"
+`)
+	if err := loadConfig(configPath); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "go.mod"), "module test\n\nrequire github.com/example/badmod v1.2.3\n")
+	writeFile(t, filepath.Join(root, "go.sum"), "github.com/example/badmod v1.2.3 h1:abc\n")
+	writeFile(t, filepath.Join(root, "Cargo.lock"), `[[package]]
+name = "bad-crate"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+`)
+
+	findings := []finding{}
+	counts := counters{}
+	walkRoot(root, options{
+		roots:              []string{root},
+		includeNodeModules: true,
+		maxBytes:           defaultMaxBytes,
+	}, &findings, &counts)
+
+	rep := buildReport(findings, counts, []string{root})
+	if !rep.Vulnerable {
+		t.Fatalf("expected vulnerable report")
+	}
+	want := map[string]bool{
+		"github.com/example/badmod@v1.2.3": false,
+		"bad-crate@0.9.0":                  false,
+	}
+	for _, finding := range rep.Findings {
+		if _, ok := want[finding.Detail]; ok {
+			want[finding.Detail] = true
+		}
+	}
+	for detail, found := range want {
+		if !found {
+			t.Fatalf("missing finding %q in %#v", detail, rep.Findings)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -793,3 +793,7 @@ scan_filenames:
   - "Pipfile.lock"
   - "METADATA"
   - "PKG-INFO"
+  - "go.mod"
+  - "go.sum"
+  - "Cargo.toml"
+  - "Cargo.lock"

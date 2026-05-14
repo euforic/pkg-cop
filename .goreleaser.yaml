@@ -34,7 +34,7 @@ archives:
     files:
       - LICENSE
       - README.md
-      - config.yaml
+      - shai-hulud.yaml
 
 checksum:
   name_template: checksums.txt

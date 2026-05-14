@@ -120,7 +120,7 @@ func Parse(args []string, output io.Writer) (Options, error) {
 		return nil
 	})
 	fs.Int64Var(&opts.MaxBytes, "max-bytes", scanner.DefaultMaxBytes, "Maximum text file size to inspect.")
-	fs.StringVar(&opts.ConfigPath, "config", "", "YAML indicator config path. Defaults to ./config.yaml or config.yaml next to the executable.")
+	fs.StringVar(&opts.ConfigPath, "config", "", "YAML indicator config path. Defaults to ./config.yaml, ./config.yml, or the same names next to the executable.")
 	fs.Usage = func() { printUsage(output) }
 
 	if err := fs.Parse(args); err != nil {
@@ -161,7 +161,7 @@ Options:
   -no-caches              Do not add npm/Bun/pnpm/pip cache paths.
   -no-python              Do not add Python site-package roots.
   -no-processes           Do not inspect running process command lines.
-  -config PATH            YAML indicator config. Defaults to ./config.yaml or next to the executable.
+  -config PATH            YAML indicator config. Defaults to ./config.yaml, ./config.yml, or the same names next to the executable.
   -max-bytes N            Maximum text file size to inspect. Default: 8388608.
   -h, -help               Show this help.
 

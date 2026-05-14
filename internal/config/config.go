@@ -54,9 +54,13 @@ func ResolvePath(path string) (string, error) {
 	if path != "" {
 		candidates = append(candidates, path)
 	} else {
-		candidates = append(candidates, "config.yaml")
+		candidates = append(candidates, "config.yaml", "config.yml")
 		if exe, err := os.Executable(); err == nil {
-			candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config.yaml"))
+			exeDir := filepath.Dir(exe)
+			candidates = append(candidates,
+				filepath.Join(exeDir, "config.yaml"),
+				filepath.Join(exeDir, "config.yml"),
+			)
 		}
 	}
 	for _, candidate := range candidates {
@@ -70,7 +74,7 @@ func ResolvePath(path string) (string, error) {
 	if path != "" {
 		return "", fmt.Errorf("config file not found: %s", path)
 	}
-	return "", errors.New("config file not found: pass -config or place config.yaml in the working directory")
+	return "", errors.New("config file not found: pass -config or place config.yaml/config.yml in the working directory")
 }
 
 func (c Config) Validate(source string) error {

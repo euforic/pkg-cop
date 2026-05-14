@@ -4,7 +4,7 @@
 
 `pkg-cop` is a small Go 1.26+ command-line scanner for package supply-chain incident response. It scans local projects, package manager caches, Python installations, and running process command lines for package/version indicators and high-confidence IOCs.
 
-The scanner logic is generic. Incident data lives in `config.yaml`, so a new supply-chain issue can be handled by editing YAML instead of changing Go code.
+The scanner logic is generic. The bundled Shai-Hulud incident data lives in `shai-hulud.yaml`; future supply-chain issues can use their own YAML config without changing Go code.
 
 ## What It Detects
 
@@ -31,7 +31,7 @@ Requirements:
 Download a release archive from [GitHub Releases](https://github.com/euforic/pkg-cop/releases). Release archives include:
 
 - the `pkg-cop` binary
-- `config.yaml`
+- `shai-hulud.yaml`
 - `README.md`
 - `LICENSE`
 
@@ -46,7 +46,7 @@ go build -o pkg-cop ./cmd/pkg-cop
 Run without building:
 
 ```sh
-go run ./cmd/pkg-cop ~/projects ~/Documents
+go run ./cmd/pkg-cop -- -config shai-hulud.yaml ~/projects ~/Documents
 ```
 
 ## Quick Start
@@ -54,25 +54,25 @@ go run ./cmd/pkg-cop ~/projects ~/Documents
 Scan common local source roots:
 
 ```sh
-./pkg-cop ~/projects ~/Documents
+./pkg-cop -config shai-hulud.yaml ~/projects ~/Documents
 ```
 
 Emit JSON for automation:
 
 ```sh
-./pkg-cop -json ~/projects > scan-report.json
+./pkg-cop -config shai-hulud.yaml -json ~/projects > scan-report.json
 ```
 
 Use an explicit config:
 
 ```sh
-./pkg-cop -config config.yaml ~/projects
+./pkg-cop -config shai-hulud.yaml ~/projects
 ```
 
 Fast lockfile-oriented pass:
 
 ```sh
-./pkg-cop -skip-node-modules -no-caches -no-python -no-processes ~/projects
+./pkg-cop -config shai-hulud.yaml -skip-node-modules -no-caches -no-python -no-processes ~/projects
 ```
 
 ## Output
@@ -138,7 +138,7 @@ Usage:
 
 Options:
   -root PATH              Add a root to scan. Positional paths also work.
-  -config PATH            YAML indicator config. Defaults to ./config.yaml or next to the executable.
+  -config PATH            YAML indicator config. Defaults to ./config.yaml, ./config.yml, or the same names next to the executable.
   -json                   Emit machine-readable JSON.
   -quiet                  Only print findings and final status.
   -skip-node-modules      Do not scan node_modules directories.
@@ -148,7 +148,7 @@ Options:
   -max-bytes N            Maximum text file size to inspect. Default: 8388608.
 ```
 
-If no roots are provided, the current working directory is scanned.
+If no roots are provided, the current working directory is scanned. The CLI defaults to generic local config names, so use `-config shai-hulud.yaml` when scanning with the bundled Shai-Hulud incident config.
 
 ## Scan Coverage
 
@@ -362,7 +362,7 @@ If a file with this basename is found under a scanned root, it is reported even 
 1. Copy the shipped config:
 
    ```sh
-   cp config.yaml my-incident.yaml
+   cp shai-hulud.yaml my-incident.yaml
    ```
 
 2. Replace or append affected package/version entries under the right ecosystem. Prefer `version_ranges` for contiguous affected patch runs and `versions` for sparse versions:
@@ -451,10 +451,10 @@ internal/cli/         flag parsing, exit codes, output selection
 internal/config/      YAML config loading and validation
 internal/scanner/     scan engine, matchers, reports, and tests
 internal/set/         tiny local set helper
-config.yaml           shipped indicator config
+shai-hulud.yaml       shipped Shai-Hulud indicator config
 ```
 
-Incident data belongs in `config.yaml`. Scanner behavior belongs in `internal/scanner`. The command in `cmd/pkg-cop` should stay thin.
+Incident data belongs in YAML configs such as `shai-hulud.yaml`. Scanner behavior belongs in `internal/scanner`. The command in `cmd/pkg-cop` should stay thin.
 
 ## Development
 
@@ -481,7 +481,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow builds Linux, macOS, and Windows artifacts for `amd64` and `arm64`, packages `config.yaml` with each archive, and publishes checksums.
+The release workflow builds Linux, macOS, and Windows artifacts for `amd64` and `arm64`, packages `shai-hulud.yaml` with each archive, and publishes checksums.
 
 You can also run a snapshot build locally if GoReleaser is installed:
 

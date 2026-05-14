@@ -11,15 +11,23 @@ import (
 )
 
 type Config struct {
-	Packages         []Package `yaml:"packages"`
-	IOCStrings       []string  `yaml:"ioc_strings"`
-	PayloadFilenames []string  `yaml:"payload_filenames"`
-	ScanFilenames    []string  `yaml:"scan_filenames"`
+	Packages         []Package                  `yaml:"packages"`
+	Ecosystems       map[string]EcosystemConfig `yaml:"ecosystems"`
+	IOCStrings       []string                   `yaml:"ioc_strings"`
+	PayloadFilenames []string                   `yaml:"payload_filenames"`
+	ScanFilenames    []string                   `yaml:"scan_filenames"`
 }
 
 type Package struct {
-	Name     string   `yaml:"name"`
-	Versions []string `yaml:"versions"`
+	Name            string   `yaml:"name"`
+	Versions        []string `yaml:"versions"`
+	VersionPatterns []string `yaml:"version_patterns"`
+	VersionRanges   []string `yaml:"version_ranges"`
+}
+
+type EcosystemConfig struct {
+	Packages      []Package `yaml:"packages"`
+	ScanFilenames []string  `yaml:"scan_filenames"`
 }
 
 func Load(path string) (Config, error) {
@@ -66,13 +74,46 @@ func ResolvePath(path string) (string, error) {
 }
 
 func (c Config) Validate(source string) error {
-	if len(c.Packages) == 0 && len(c.IOCStrings) == 0 && len(c.PayloadFilenames) == 0 {
+	if len(c.Packages) == 0 && len(c.Ecosystems) == 0 && len(c.IOCStrings) == 0 && len(c.PayloadFilenames) == 0 {
 		return fmt.Errorf("config %s has no indicators", source)
 	}
 	for _, pkg := range c.Packages {
-		if strings.TrimSpace(pkg.Name) == "" || len(pkg.Versions) == 0 {
-			return fmt.Errorf("config %s has package entry with missing name or versions", source)
+		if err := validatePackage(source, pkg); err != nil {
+			return err
 		}
+	}
+	for ecosystem, cfg := range c.Ecosystems {
+		ecosystem = strings.ToLower(strings.TrimSpace(ecosystem))
+		if ecosystem == "" {
+			return fmt.Errorf("config %s has ecosystem entry with missing name", source)
+		}
+		if !isSupportedEcosystem(ecosystem) {
+			return fmt.Errorf("config %s has unsupported ecosystem %q", source, ecosystem)
+		}
+		for _, pkg := range cfg.Packages {
+			if err := validatePackage(source, pkg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func isSupportedEcosystem(ecosystem string) bool {
+	switch ecosystem {
+	case "generic", "npm", "pypi", "go", "rust":
+		return true
+	default:
+		return false
+	}
+}
+
+func validatePackage(source string, pkg Package) error {
+	if strings.TrimSpace(pkg.Name) == "" {
+		return fmt.Errorf("config %s has package entry with missing name", source)
+	}
+	if len(pkg.Versions) == 0 && len(pkg.VersionPatterns) == 0 && len(pkg.VersionRanges) == 0 {
+		return fmt.Errorf("config %s has package %s with no versions, version_patterns, or version_ranges", source, pkg.Name)
 	}
 	return nil
 }

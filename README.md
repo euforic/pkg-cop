@@ -196,11 +196,44 @@ By default, `node_modules` is scanned because installed package manifests can re
 The config is plain YAML:
 
 ```yaml
-packages:
-  - name: "@scope/package"
-    versions:
-      - "1.2.3"
-      - "1.2.4"
+ecosystems:
+  npm:
+    packages:
+      - name: "@scope/package"
+        versions:
+          - "1.2.3"
+        version_patterns:
+          - "1.2.x"
+        version_ranges:
+          - ">=2.0.0 <2.1.0"
+    scan_filenames:
+      - "package-lock.json"
+
+  pypi:
+    packages:
+      - name: "compromised-package"
+        versions:
+          - "4.2.0"
+    scan_filenames:
+      - "requirements.txt"
+      - "METADATA"
+
+  go:
+    packages:
+      - name: "github.com/example/badmod"
+        version_ranges:
+          - ">=1.2.0 <1.3.0"
+    scan_filenames:
+      - "go.mod"
+      - "go.sum"
+
+  rust:
+    packages:
+      - name: "bad-crate"
+        version_patterns:
+          - "0.9.*"
+    scan_filenames:
+      - "Cargo.lock"
 
 ioc_strings:
   - "known-bad-domain.example"
@@ -209,55 +242,92 @@ ioc_strings:
 payload_filenames:
   - "payload.js"
   - "setup.mjs"
-
-scan_filenames:
-  - "package-lock.json"
-  - "requirements.txt"
-  - "go.sum"
-  - "Cargo.lock"
-  - "METADATA"
 ```
 
-### `packages`
+Top-level `packages` and `scan_filenames` are still supported as a backward-compatible generic bucket, but new incident configs should prefer `ecosystems` so the scanner only checks relevant package indicators for each language.
 
-Use `packages` for exact package/version indicators.
+### `ecosystems`
+
+Use `ecosystems` for language-specific package indicators. Supported ecosystem keys are `npm`, `pypi`, `go`, and `rust`.
 
 ```yaml
-packages:
-  - name: "@tanstack/react-router"
-    versions:
-      - "1.169.5"
-      - "1.169.8"
-  - name: "mistralai"
-    versions:
-      - "2.4.6"
-  - name: "github.com/example/badmod"
-    versions:
-      - "v1.2.3"
-  - name: "bad-crate"
-    versions:
-      - "0.9.0"
+ecosystems:
+  npm:
+    packages:
+      - name: "@tanstack/react-router"
+        versions:
+          - "1.169.5"
+          - "1.169.8"
+  pypi:
+    packages:
+      - name: "mistralai"
+        versions:
+          - "2.4.6"
+  go:
+    packages:
+      - name: "github.com/example/badmod"
+        versions:
+          - "v1.2.3"
+  rust:
+    packages:
+      - name: "bad-crate"
+        versions:
+          - "0.9.0"
 ```
 
-The scanner looks for these in structured npm lockfiles, npm manifests, Python requirement files, Python lockfiles, installed Python package metadata, Go module files, Go module cache metadata, Cargo manifests, and Cargo lockfiles.
+The scanner uses the file being inspected to choose the relevant ecosystem. For example, `Cargo.lock` is checked against Rust crate indicators, not npm package indicators with the same name.
 
-For Go modules, use the module path and Go's version string, including the `v` prefix:
+### Version Selectors
+
+Package entries support three selector fields:
+
+- `versions`: exact versions by default; also accepts wildcard or range syntax for convenience.
+- `version_patterns`: wildcard selectors such as `1.2.x`, `1.*`, or `0.9.*`.
+- `version_ranges`: semver-style ranges such as `>=1.2.0 <1.3.0`, `^1.2.3`, and `~1.2.0`.
+
+For Go modules, exact versions should use Go's version string, including the `v` prefix:
 
 ```yaml
-packages:
-  - name: "github.com/acme/compromised"
-    versions:
-      - "v1.2.3"
+ecosystems:
+  go:
+    packages:
+      - name: "github.com/acme/compromised"
+        versions:
+          - "v1.2.3"
+        version_ranges:
+          - ">=1.2.0 <1.3.0"
 ```
 
 For Rust crates, use the crate name exactly as it appears in `Cargo.toml` or `Cargo.lock`:
 
 ```yaml
-packages:
-  - name: "compromised-crate"
-    versions:
-      - "0.4.2"
+ecosystems:
+  rust:
+    packages:
+      - name: "compromised-crate"
+        versions:
+          - "0.4.2"
+        version_patterns:
+          - "0.4.x"
 ```
+
+### `scan_filenames`
+
+Each ecosystem can define `scan_filenames` to extend or narrow which basenames are treated as package metadata for that language:
+
+```yaml
+ecosystems:
+  npm:
+    scan_filenames:
+      - "package-lock.json"
+      - "pnpm-lock.yaml"
+  pypi:
+    scan_filenames:
+      - "requirements.txt"
+      - "METADATA"
+```
+
+The scanner also has built-in defaults for common npm, PyPI, Go, and Rust manifest and lockfile names. Keep custom filename lists focused. Adding broad names like `index.js` across large repositories will slow scans and increase false positives.
 
 ### `ioc_strings`
 
@@ -285,24 +355,6 @@ payload_filenames:
 
 If a file with this basename is found under a scanned root, it is reported even before file content is read.
 
-### `scan_filenames`
-
-Use `scan_filenames` to control which file basenames are read as text:
-
-```yaml
-scan_filenames:
-  - "package-lock.json"
-  - "pnpm-lock.yaml"
-  - "requirements.txt"
-  - "go.mod"
-  - "go.sum"
-  - "Cargo.toml"
-  - "Cargo.lock"
-  - "METADATA"
-```
-
-Keep this list focused. Adding broad names like `index.js` across large repositories will slow scans and increase false positives.
-
 ## Creating A New Incident Config
 
 1. Copy the shipped config:
@@ -311,13 +363,17 @@ Keep this list focused. Adding broad names like `index.js` across large reposito
    cp config.yaml my-incident.yaml
    ```
 
-2. Replace or append affected package/version entries:
+2. Replace or append affected package/version entries under the right ecosystem:
 
    ```yaml
-   packages:
-     - name: "compromised-package"
-       versions:
-         - "4.2.0"
+   ecosystems:
+     pypi:
+       packages:
+         - name: "compromised-package"
+           versions:
+             - "4.2.0"
+           version_ranges:
+             - ">=4.2.0 <4.2.3"
    ```
 
 3. Add unique IOCs:
@@ -354,10 +410,10 @@ Keep this list focused. Adding broad names like `index.js` across large reposito
 
 When new indicators are published:
 
-1. Add package/version entries to `packages`.
+1. Add package/version entries to the right `ecosystems.<name>.packages` list.
 2. Add domains, URLs, hashes, or marker strings to `ioc_strings`.
 3. Add payload or persistence filenames to `payload_filenames`.
-4. Add any new lockfile or metadata filenames to `scan_filenames`.
+4. Add any new lockfile or metadata filenames to the right ecosystem `scan_filenames`.
 5. Run tests:
 
    ```sh

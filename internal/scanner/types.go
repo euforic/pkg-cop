@@ -9,6 +9,31 @@ type Options struct {
 	MaxBytes           int64
 }
 
+type Ecosystem string
+
+const (
+	EcosystemGeneric Ecosystem = "generic"
+	EcosystemNPM     Ecosystem = "npm"
+	EcosystemPyPI    Ecosystem = "pypi"
+	EcosystemGo      Ecosystem = "go"
+	EcosystemRust    Ecosystem = "rust"
+)
+
+func parseEcosystem(value string) Ecosystem {
+	switch Ecosystem(value) {
+	case EcosystemNPM:
+		return EcosystemNPM
+	case EcosystemPyPI:
+		return EcosystemPyPI
+	case EcosystemGo:
+		return EcosystemGo
+	case EcosystemRust:
+		return EcosystemRust
+	default:
+		return EcosystemGeneric
+	}
+}
+
 type Finding struct {
 	Severity string `json:"severity"`
 	Type     string `json:"type"`

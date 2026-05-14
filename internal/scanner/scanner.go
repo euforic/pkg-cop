@@ -17,19 +17,23 @@ import (
 )
 
 type Scanner struct {
-	indicators    map[string]packageIndicator
-	iocs          []string
-	payloadNames  map[string]struct{}
-	scanFileNames map[string]struct{}
-	skipDirs      map[string]struct{}
+	indicators          map[Ecosystem]map[string]packageIndicator
+	iocs                []string
+	payloadNames        map[string]struct{}
+	scanFileNames       map[string]struct{}
+	scanFileEcosystems  map[string]map[Ecosystem]struct{}
+	cachePathEcosystems map[string]Ecosystem
+	skipDirs            map[string]struct{}
 }
 
 func New(cfg config.Config) *Scanner {
-	return &Scanner{
-		indicators:    buildPackageIndicators(cfg.Packages),
-		iocs:          append([]string{}, cfg.IOCStrings...),
-		payloadNames:  set.New(cfg.PayloadFilenames...),
-		scanFileNames: set.New(cfg.ScanFilenames...),
+	scanner := &Scanner{
+		indicators:          make(map[Ecosystem]map[string]packageIndicator),
+		iocs:                append([]string{}, cfg.IOCStrings...),
+		payloadNames:        set.New(cfg.PayloadFilenames...),
+		scanFileNames:       set.New(cfg.ScanFilenames...),
+		scanFileEcosystems:  make(map[string]map[Ecosystem]struct{}),
+		cachePathEcosystems: defaultCachePathEcosystems(),
 		skipDirs: set.New(
 			".DS_Store",
 			".Trash",
@@ -44,6 +48,26 @@ func New(cfg config.Config) *Scanner {
 			"Photo Booth Library",
 		),
 	}
+	scanner.indicators[EcosystemGeneric] = buildPackageIndicators(cfg.Packages, EcosystemGeneric)
+	for _, name := range cfg.ScanFilenames {
+		scanner.addScanFilename(name, EcosystemGeneric)
+	}
+	for ecosystem, filenames := range defaultScanFilenames() {
+		for _, name := range filenames {
+			scanner.addScanFilename(name, ecosystem)
+		}
+	}
+	for ecosystemName, ecosystemCfg := range cfg.Ecosystems {
+		ecosystem := parseEcosystem(strings.ToLower(strings.TrimSpace(ecosystemName)))
+		scanner.indicators[ecosystem] = mergePackageIndicators(
+			scanner.indicators[ecosystem],
+			buildPackageIndicators(ecosystemCfg.Packages, ecosystem),
+		)
+		for _, name := range ecosystemCfg.ScanFilenames {
+			scanner.addScanFilename(name, ecosystem)
+		}
+	}
+	return scanner
 }
 
 func (s *Scanner) Run(opts Options) Report {
@@ -87,6 +111,64 @@ func cacheRoots() []string {
 	}
 	candidates = append(candidates, goCacheRoots()...)
 	return existingDirs(candidates)
+}
+
+func defaultScanFilenames() map[Ecosystem][]string {
+	return map[Ecosystem][]string{
+		EcosystemNPM: {
+			"package.json",
+			"package-lock.json",
+			"npm-shrinkwrap.json",
+			"pnpm-lock.yaml",
+			"yarn.lock",
+			"bun.lock",
+		},
+		EcosystemPyPI: {
+			"requirements.txt",
+			"requirements-dev.txt",
+			"constraints.txt",
+			"pyproject.toml",
+			"poetry.lock",
+			"pdm.lock",
+			"uv.lock",
+			"Pipfile",
+			"Pipfile.lock",
+			"METADATA",
+			"PKG-INFO",
+		},
+		EcosystemGo: {
+			"go.mod",
+			"go.sum",
+		},
+		EcosystemRust: {
+			"Cargo.toml",
+			"Cargo.lock",
+		},
+	}
+}
+
+func defaultCachePathEcosystems() map[string]Ecosystem {
+	sep := string(filepath.Separator)
+	return map[string]Ecosystem{
+		sep + ".bun" + sep:              EcosystemNPM,
+		sep + ".npm" + sep:              EcosystemNPM,
+		sep + ".pnpm-store" + sep:       EcosystemNPM,
+		sep + "pnpm" + sep:              EcosystemNPM,
+		sep + "pip" + sep:               EcosystemPyPI,
+		sep + ".cargo" + sep:            EcosystemRust,
+		sep + "pkg" + sep + "mod" + sep: EcosystemGo,
+	}
+}
+
+func (s *Scanner) addScanFilename(name string, ecosystem Ecosystem) {
+	if name == "" {
+		return
+	}
+	s.scanFileNames[name] = struct{}{}
+	if s.scanFileEcosystems[name] == nil {
+		s.scanFileEcosystems[name] = make(map[Ecosystem]struct{})
+	}
+	s.scanFileEcosystems[name][ecosystem] = struct{}{}
 }
 
 func goCacheRoots() []string {
@@ -261,16 +343,19 @@ func (s *Scanner) scanPackageJSON(path string, data []byte, findings *[]Finding)
 	if name == "" {
 		name = packageNameFromNodeModulesPath(path)
 	}
-	s.checkPackageVersion(path, name, doc.Version, findings)
+	s.checkPackageVersion(path, []Ecosystem{EcosystemNPM, EcosystemGeneric}, name, doc.Version, findings)
 	for _, deps := range []map[string]string{doc.Dependencies, doc.DevDependencies, doc.OptionalDependencies, doc.PeerDependencies} {
 		for depName, spec := range deps {
-			indicator, ok := s.indicators[depName]
+			indicator, ok := s.indicator(EcosystemNPM, depName)
 			if !ok {
-				continue
+				indicator, ok = s.indicator(EcosystemGeneric, depName)
+				if !ok {
+					continue
+				}
 			}
-			for version := range indicator.versions {
-				if versionSpecMentions(spec, version) {
-					addFinding(findings, "high", "dependency-range-includes-affected-version", path, depName+": "+spec+" includes "+version)
+			for _, affected := range indicator.specs {
+				if affected.mayIncludeDependencySpec(spec) {
+					addFinding(findings, "high", "dependency-range-includes-affected-version", path, depName+": "+spec+" intersects "+affected.raw)
 				}
 			}
 		}
@@ -296,10 +381,10 @@ func (s *Scanner) scanPackageLock(path string, data []byte, findings *[]Finding)
 		if strings.HasPrefix(pkgPath, "node_modules/") {
 			name = packageNameFromNodeModulesPath(pkgPath)
 		}
-		s.checkPackageVersion(path, name, meta.Version, findings)
+		s.checkPackageVersion(path, []Ecosystem{EcosystemNPM, EcosystemGeneric}, name, meta.Version, findings)
 	}
 	for name, meta := range doc.Dependencies {
-		s.checkPackageVersion(path, name, meta.Version, findings)
+		s.checkPackageVersion(path, []Ecosystem{EcosystemNPM, EcosystemGeneric}, name, meta.Version, findings)
 	}
 	s.scanText(path, string(data), findings)
 }
@@ -310,25 +395,57 @@ func (s *Scanner) scanText(path, text string, findings *[]Finding) {
 			addFinding(findings, "critical", "ioc-string", path, ioc)
 		}
 	}
-	for name, indicator := range s.indicators {
-		if !strings.Contains(text, name) {
-			continue
-		}
-		for _, matcher := range indicator.matchers {
-			if matcher.matches(text) {
-				addFinding(findings, "critical", "affected-package-version", path, matcher.detail)
+	for _, ecosystem := range s.ecosystemsForPath(path) {
+		for name, indicator := range s.indicators[ecosystem] {
+			if !strings.Contains(text, name) {
+				continue
+			}
+			for _, match := range indicator.matches(text) {
+				addFinding(findings, "critical", "affected-package-version", path, match.name+"@"+match.version)
 			}
 		}
 	}
 }
 
-func (s *Scanner) checkPackageVersion(path, name, version string, findings *[]Finding) {
+func (s *Scanner) checkPackageVersion(path string, ecosystems []Ecosystem, name, version string, findings *[]Finding) {
 	if name == "" || version == "" {
 		return
 	}
-	if _, ok := s.indicators[name].versions[version]; ok {
-		addFinding(findings, "critical", "affected-package-version", path, name+"@"+version)
+	for _, ecosystem := range ecosystems {
+		indicator, ok := s.indicator(ecosystem, name)
+		if ok && indicator.versionMatches(version) {
+			addFinding(findings, "critical", "affected-package-version", path, name+"@"+version)
+			return
+		}
 	}
+}
+
+func (s *Scanner) indicator(ecosystem Ecosystem, name string) (packageIndicator, bool) {
+	indicators := s.indicators[ecosystem]
+	if indicators == nil {
+		return packageIndicator{}, false
+	}
+	indicator, ok := indicators[name]
+	return indicator, ok
+}
+
+func (s *Scanner) ecosystemsForPath(path string) []Ecosystem {
+	base := filepath.Base(path)
+	ecosystems := map[Ecosystem]struct{}{EcosystemGeneric: {}}
+	for ecosystem := range s.scanFileEcosystems[base] {
+		ecosystems[ecosystem] = struct{}{}
+	}
+	for marker, ecosystem := range s.cachePathEcosystems {
+		if strings.Contains(path, marker) {
+			ecosystems[ecosystem] = struct{}{}
+		}
+	}
+	out := make([]Ecosystem, 0, len(ecosystems))
+	for ecosystem := range ecosystems {
+		out = append(out, ecosystem)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func (s *Scanner) scanProcesses(findings *[]Finding) {

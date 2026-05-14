@@ -10,12 +10,21 @@ import (
 
 func TestScannerDetectsNPMAndPyPIIndicators(t *testing.T) {
 	scan := newTestScanner(t, config.Config{
-		Packages: []config.Package{
-			{Name: "@opensearch-project/opensearch", Versions: []string{"3.8.0"}},
-			{Name: "@uipath/cli", Versions: []string{"1.0.1"}},
-			{Name: "mistralai", Versions: []string{"2.4.6"}},
+		Ecosystems: map[string]config.EcosystemConfig{
+			"npm": {
+				Packages: []config.Package{
+					{Name: "@opensearch-project/opensearch", Versions: []string{"3.8.0"}},
+					{Name: "@uipath/cli", Versions: []string{"1.0.1"}},
+				},
+				ScanFilenames: []string{"package-lock.json"},
+			},
+			"pypi": {
+				Packages: []config.Package{
+					{Name: "mistralai", Versions: []string{"2.4.6"}},
+				},
+				ScanFilenames: []string{"METADATA"},
+			},
 		},
-		ScanFilenames: []string{"package-lock.json", "METADATA"},
 	})
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "package-lock.json"), `{
@@ -36,11 +45,20 @@ func TestScannerDetectsNPMAndPyPIIndicators(t *testing.T) {
 
 func TestScannerDetectsGoAndRustIndicators(t *testing.T) {
 	scan := newTestScanner(t, config.Config{
-		Packages: []config.Package{
-			{Name: "github.com/example/badmod", Versions: []string{"v1.2.3"}},
-			{Name: "bad-crate", Versions: []string{"0.9.0"}},
+		Ecosystems: map[string]config.EcosystemConfig{
+			"go": {
+				Packages: []config.Package{
+					{Name: "github.com/example/badmod", Versions: []string{"v1.2.3"}},
+				},
+				ScanFilenames: []string{"go.mod", "go.sum"},
+			},
+			"rust": {
+				Packages: []config.Package{
+					{Name: "bad-crate", Versions: []string{"0.9.0"}},
+				},
+				ScanFilenames: []string{"Cargo.toml", "Cargo.lock"},
+			},
 		},
-		ScanFilenames: []string{"go.mod", "go.sum", "Cargo.toml", "Cargo.lock"},
 	})
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "go.mod"), "module test\n\nrequire github.com/example/badmod v1.2.3\n")
@@ -60,11 +78,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 func TestScannerCleanFixture(t *testing.T) {
 	scan := newTestScanner(t, config.Config{
-		Packages: []config.Package{
-			{Name: "@tanstack/react-router", Versions: []string{"1.169.8"}},
-			{Name: "mistralai", Versions: []string{"2.4.6"}},
+		Ecosystems: map[string]config.EcosystemConfig{
+			"npm": {
+				Packages: []config.Package{
+					{Name: "@tanstack/react-router", Versions: []string{"1.169.8"}},
+				},
+				ScanFilenames: []string{"package-lock.json"},
+			},
+			"pypi": {
+				Packages: []config.Package{
+					{Name: "mistralai", Versions: []string{"2.4.6"}},
+				},
+				ScanFilenames: []string{"METADATA"},
+			},
 		},
-		ScanFilenames: []string{"package-lock.json", "METADATA"},
 	})
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "package-lock.json"), `{
@@ -78,6 +105,77 @@ func TestScannerCleanFixture(t *testing.T) {
 	if rep.Vulnerable {
 		t.Fatalf("expected clean report, got %#v", rep.Findings)
 	}
+}
+
+func TestScannerKeepsEcosystemIndicatorsSeparate(t *testing.T) {
+	scan := newTestScanner(t, config.Config{
+		Ecosystems: map[string]config.EcosystemConfig{
+			"npm": {
+				Packages: []config.Package{
+					{Name: "bad-crate", Versions: []string{"0.9.0"}},
+				},
+				ScanFilenames: []string{"package-lock.json"},
+			},
+		},
+	})
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Cargo.lock"), `[[package]]
+name = "bad-crate"
+version = "0.9.0"
+`)
+
+	rep := scan.Run(testOptions(root))
+	if rep.Vulnerable {
+		t.Fatalf("expected ecosystem-scoped clean report, got %#v", rep.Findings)
+	}
+}
+
+func TestScannerSupportsWildcardAndRangeVersions(t *testing.T) {
+	scan := newTestScanner(t, config.Config{
+		Ecosystems: map[string]config.EcosystemConfig{
+			"npm": {
+				Packages: []config.Package{
+					{Name: "@scope/pkg", VersionPatterns: []string{"1.2.x"}, VersionRanges: []string{">=2.0.0 <2.1.0"}},
+				},
+				ScanFilenames: []string{"package-lock.json"},
+			},
+			"go": {
+				Packages: []config.Package{
+					{Name: "github.com/example/badmod", VersionRanges: []string{">=v1.2.0 <v1.3.0"}},
+				},
+				ScanFilenames: []string{"go.mod"},
+			},
+			"rust": {
+				Packages: []config.Package{
+					{Name: "bad-crate", VersionPatterns: []string{"0.9.*"}},
+				},
+				ScanFilenames: []string{"Cargo.lock"},
+			},
+		},
+	})
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "package-lock.json"), `{
+  "packages": {
+    "node_modules/@scope/pkg": { "version": "1.2.7" },
+    "node_modules/@scope/other": { "version": "2.0.4" }
+  },
+  "dependencies": {
+    "@scope/pkg": { "version": "2.0.4" }
+  }
+}`)
+	writeFile(t, filepath.Join(root, "go.mod"), "module test\n\nrequire github.com/example/badmod v1.2.3\n")
+	writeFile(t, filepath.Join(root, "Cargo.lock"), `[[package]]
+name = "bad-crate"
+version = "0.9.4"
+`)
+
+	rep := scan.Run(testOptions(root))
+	assertVulnerable(t, rep, map[string]bool{
+		"@scope/pkg@1.2.7":                 false,
+		"@scope/pkg@2.0.4":                 false,
+		"github.com/example/badmod@v1.2.3": false,
+		"bad-crate@0.9.4":                  false,
+	})
 }
 
 func newTestScanner(t *testing.T, cfg config.Config) *Scanner {
